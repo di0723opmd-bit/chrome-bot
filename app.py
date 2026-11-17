@@ -1,127 +1,53 @@
-import json
-import os
-import re
+from flask import Flask, request, jsonify
+from brain import chrome_reply
+app = Flask(__name__)
 
-FILE = "memory.json"
-memory = []
-facts = {}
+HTML = """
+<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHROME</title>
+<style>
+body{background:#0b0b0b;color:white;font-family:sans-serif;padding:15px}
+#box{height:70vh;overflow:auto;border:1px solid #333;padding:10px;border-radius:12px}
+.msg{margin:8px 0;padding:10px;border-radius:10px}
+.me{background:#1a73e8;text-align:right}
+.bot{background:#222}
+input{width:75%;padding:12px;border-radius:20px;border:none}
+button{padding:12px 16px;border-radius:20px;border:none;background:#1a73e8;color:white}
+</style></head>
+<body>
+<h2>CHROME</h2>
+<div id="box"><div class="msg bot">Salut ! Moi c'est CHROME. Je suis ton bot qui apprend en discutant. Tu t'appelles comment ?</div></div><br>
+<input id="inp" placeholder="Parle a CHROME...">
+<button onclick="send()">Envoyer</button>
+<script>
+async function send(){
+  let v=document.getElementById('inp').value;
+  if(!v) return;
+  let box=document.getElementById('box');
+  box.innerHTML+='<div class="msg me">'+v+'</div>';
+  document.getElementById('inp').value='';
+  let r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:v})});
+  let d=await r.json();
+  box.innerHTML+='<div class="msg bot">'+d.reply+'</div>';
+  box.scrollTop=box.scrollHeight;
+}
+</script></body></html>
+"""
 
-# Charger la mémoire si elle existe
-if os.path.exists(FILE):
-    try:
-        with open(FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            memory = data.get("memory", [])
-            facts = data.get("facts", {})
-    except:
-        pass
+@app.route("/")
+def home():
+    return HTML
 
-def save():
-    try:
-        with open(FILE, "w", encoding="utf-8") as f:
-            json.dump({"memory": memory, "facts": facts}, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.json
+    msg = data.get("message", "")
+    reply = chrome_reply(msg)
+    return jsonify({"reply": reply})
 
-def chrome_reply(msg):
-    m = msg.strip()
-    low = m.lower()
-    if not m:
-        return "Je t'écoute ?"
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
+"""
 
-    # --- Commandes classiques ---
-    if m.startswith("!remember "):
-        txt = m[10:].strip()
-        memory.append(txt)
-        save()
-        return f"Retenu ✅ : {txt} Je ne vais pas l'oublier."
-
-    if low == "!recall" or "tu te souviens" in low or "qu'est ce que tu sais" in low or "qu'est-ce que tu sais" in low:
-        if not facts and not memory:
-            return "Pour l'instant je ne sais pas grand chose sur toi, mais parle-moi et je vais apprendre. Comment tu t'appelles ?"
-        out = "Voilà ce que je sais sur toi :\n"
-        for k, v in facts.items():
-            out += f"- {k} : {v}\n"
-        for x in memory:
-            out += f"- {x}\n"
-        return out
-
-    if low == "!forget":
-        memory.clear()
-        facts.clear()
-        save()
-        return "J'ai tout oublié. On recommence à zéro ?"
-
-    # --- APPRENTISSAGE AUTOMATIQUE ---
-    # Je m'appelle ...
-    match = re.search(r"je m'appelle (.+)", low)
-    if match:
-        nom = match.group(1).strip().capitalize()
-        facts["prénom"] = nom
-        save()
-        return f"Enchanté {nom} ! Je retiens que tu t'appelles {nom}. Tu fais quoi dans la vie ?"
-
-    # J'ai ... ans
-    match = re.search(r"j'ai (\d+) ans", low)
-    if match:
-        facts["âge"] = match.group(1) + " ans"
-        save()
-        return f"Ok, {match.group(1)} ans, retenu. Tu habites où ?"
-
-    # J'aime ...
-    match = re.search(r"j'aime (.+)", low)
-    if match:
-        aime = match.group(1).strip()
-        facts["aime"] = aime
-        save()
-        return f"Ah tu aimes {aime} ! Moi aussi je vais m'y intéresser. Pourquoi tu aimes ça ?"
-
-    # J'habite ...
-    match = re.search(r"j'habite (.+)", low)
-    if match:
-        facts["habite"] = match.group(1).strip()
-        save()
-        return f"Ok, tu habites à {match.group(1)}. C'est bien là-bas ?"
-
-    # Mon projet / Mon ... c'est ...
-    match = re.search(r"mon (.+) (c'est|est) (.+)", low)
-    if match:
-        key = match.group(1).strip()
-        val = match.group(3).strip()
-        facts[f"mon {key}"] = val
-        save()
-        return f"Retenu : ton {key} c'est {val}. Raconte-moi plus sur ça."
-
-    # Je suis ...
-    match = re.search(r"je suis (.+)", low)
-    if match:
-        facts["tu es"] = match.group(1).strip()
-        save()
-        return f"Ok, tu es {match.group(1)}. Et tu veux que je t'aide à faire quoi ?"
-
-    # --- DISCUSSION ---
-    if low in ["salut", "slt", "yo", "hello", "bonjour", "coucou"]:
-        nom = facts.get("prénom", "")
-        if nom:
-            return f"Salut {nom} ! Content de te revoir. On parle de quoi aujourd'hui ?"
-        return "Salut ! C'est CHROME. On ne s'est pas encore présenté, tu t'appelles comment ?"
-
-    if "ça va" in low or "ca va" in low:
-        return "Ça va super, je suis en ligne et je retiens tout ce que tu me dis. Et toi, ta journée ?"
-
-    if "quizz" in low or "quiz" in low:
-        return "Oui ! On fait un quizz. Dis-moi un sujet : foot, maths, histoire, et je te pose une question. Et je retiendrai ton score."
-
-    if "tu t'appelles" in low or "ton nom" in low:
-        return "Je m'appelle CHROME. Je suis ton bot qui apprend en discutant avec toi. Plus on parle, plus je te connais."
-
-    if "merci" in low:
-        return "De rien, c'est normal. Tu veux qu'on continue à discuter ?"
-
-    if low.endswith("?"):
-        return "Bonne question. Je vais retenir ça. Tu peux m'en dire plus ? Qu'est-ce que toi tu en penses ?"
-
-    # --- Sinon, il apprend la phrase comme souvenir et continue la discussion ---
-    memory.append(m)
-    save()
-    return f"Ok, j'ai retenu ça : \"{m}\". Et après ? Raconte-moi la suite."
+Fais **Commit** sur les 2, attends 1 minute, actualise, et re-teste :
