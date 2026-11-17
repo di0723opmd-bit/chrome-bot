@@ -17,9 +17,9 @@ input{width:75%;padding:12px;border-radius:20px;border:none}
 button{padding:12px 16px;border-radius:20px;border:none;background:#1a73e8;color:white}
 </style></head>
 <body>
-<h2>CHROME 🧠</h2>
+<h2>CHROME</h2>
 <div id="box"></div><br>
-<input id="inp" placeholder="Parle à CHROME...">
+<input id="inp" placeholder="Parle a CHROME...">
 <button onclick="send()">Envoyer</button>
 <script>
 async function send(){
@@ -46,24 +46,8 @@ def chat():
     msg = data.get("message", "")
     reply = chrome_reply(msg)
     if reply is None:
-        reply = "Je t'écoute. Essaie !remember pour que je retienne, et !recall pour que je me souvienne."
+        reply = "Je t'ecoute. Essaie !remember pour que je retienne, et !recall pour que je me souvienne."
     return jsonify({"reply": reply})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-"""
-
-3. Tu cliques **Commit changes**
-
-Render va le voir tout seul et il va redéployer en 40 secondes, comme tout à l'heure.
-
-Après ça, tu retournes sur ton lien `chrome-bot...` et tu auras une vraie page de chat avec un bouton **Envoyer**.
-
-Tu pourras lui dire :
-> `!remember Mon projet s'appelle CHROME`
-Puis :
-> `!recall`
-
-Et il va te répondre avec sa mémoire.
-
-Tu veux qu'on le fasse ? Modifie `app.py` comme je t'ai dit et dis-moi quand c'est fait, on teste ensemble.
