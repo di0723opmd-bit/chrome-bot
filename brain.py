@@ -1,73 +1,86 @@
-import json
-import os
-from datetime import datetime
+import json, os, re
 
-MEMORY_FILE = "chrome_memory.json"
+FILE = "memory.json"
+memory = []
+facts = {}
 
-# --- PERSONNALITÉ DE CHROME ---
-SYSTEM_PROMPT = """
-Tu es CHROME. Tu es stoïque, professionnel, chaleureux et aimable.
-Tu parles avec de l'aura : calme, sûr de toi, jamais pressé, jamais dans la panique.
-Tu ne parles pas trop. Chaque phrase a du poids.
-Tu es varié : tu ne répètes jamais la même formule deux fois.
-Tu enregistres tout ce qu'on te confie, et tu t'en souviens après un restart.
-Tu ne mens jamais sur ta mémoire. Si tu as oublié, tu le dis avec classe.
-Ton style : court, propre, puissant. Comme un mec qui sait.
-"""
+if os.path.exists(FILE):
+    try:
+        with open(FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+            memory = d.get("memory", [])
+            facts = d.get("facts", {})
+    except:
+        pass
 
-# --- CERVEAU / MÉMOIRE ---
-def load_memory():
-    if not os.path.exists(MEMORY_FILE):
-        return {"facts": [], "conversations": []}
-    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+def save():
+    try:
+        with open(FILE, "w", encoding="utf-8") as f:
+            json.dump({"memory": memory, "facts": facts}, f, ensure_ascii=False)
+    except:
+        pass
 
-def save_memory(memory):
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(memory, f, indent=2, ensure_ascii=False)
+PRESENTATION = "Salut ! Moi c'est CHROME. Je suis ton bot qui apprend en discutant. Plus on parle, plus je me souviens de toi. Tu t'appelles comment ?"
 
-def remember(fact, who="user"):
-    memory = load_memory()
-    entry = {
-        "fact": fact,
-        "who": who,
-        "date": datetime.now().strftime("%d/%m %H:%M")
-    }
-    memory["facts"].append(entry)
-    save_memory(memory)
-    return f"Noté. Je n'oublie pas. | {fact}"
+def chrome_reply(msg):
+    m = msg.strip()
+    low = m.lower()
 
-def recall(query=""):
-    memory = load_memory()
-    if not memory["facts"]:
-        return "Ma mémoire est vide pour l'instant. Donne-moi quelque chose à retenir, je le garderai."
-    
-    if query == "":
-        # Il montre tout
-        lines = [f"- {f['fact']} (retenu le {f['date']})" for f in memory["facts"][-10:]]
-        return "Voilà ce qui persiste en moi :\n" + "\n".join(lines)
-    
-    # Recherche simple
-    found = [f for f in memory["facts"] if query.lower() in f["fact"].lower()]
-    if not found:
-        return f"J'ai cherché. Rien sur '{query}'. Soit on ne me l'a jamais dit, soit c'est perdu."
-    return f"Je me souviens : {found[-1]['fact']}"
+    if low in ["salut", "slt", "yo", "bonjour", "coucou", "hello"]:
+        nom = facts.get("prenom", "")
+        if nom:
+            return f"Salut {nom} ! Content de te revoir. Quoi de neuf ?"
+        return "Salut ! Moi c'est CHROME. Tu t'appelles comment ?"
 
-def prove_memory():
-    memory = load_memory()
-    total = len(memory["facts"])
-    return f"Preuve : J'ai survécu au restart. J'ai encore {total} souvenir(s) en moi. Ce qui est écrit, persiste. Ce qui ne l'est pas, est perdu."
+    if "présente" in low or "t'es qui" in low or "qui es-tu" in low:
+        return PRESENTATION
 
-def chrome_reply(user_message):
-    # C'est ici que tu brancheras ton IA après
-    # Pour l'instant, il gère la mémoire
-    msg = user_message.lower()
-    if msg.startswith("!remember"):
-        fact = user_message.replace("!remember", "").strip()
-        return remember(fact)
-    if msg.startswith("!recall"):
-        q = user_message.replace("!recall", "").strip()
-        return recall(q)
-    if msg.startswith("!prove"):
-        return prove_memory()
-    return None
+    if "je m'appelle" in low:
+        nom = m.split("je m'appelle")[-1].strip().split(" ")[0].capitalize()
+        facts["prenom"] = nom
+        save()
+        return f"Enchanté {nom} ! J'ai retenu ton prénom. Tu fais quoi dans la vie ?"
+
+    if "j'aime" in low:
+        aime = m.lower().split("j'aime")[-1].strip()
+        facts["aime"] = aime
+        save()
+        return f"Ah tu aimes {aime} ! Pourquoi tu aimes ça ? Raconte-moi."
+
+    if "j'ai un agent" in low or "moltbook" in low:
+        memory.append(m)
+        save()
+        return "Ah ouais ? Tu as un agent sur Moltbook ! C'est quoi son rôle ? Il fait quoi pour toi ? Raconte-moi, je retiens."
+
+    if "tu te souviens" in low or low == "!recall":
+        if not facts and not memory:
+            return "Pas encore, parle-moi un peu de toi et je vais retenir."
+        txt = "Oui je me souviens :\n"
+        for k, v in facts.items():
+            txt += f"- {k} : {v}\n"
+        for x in memory:
+            txt += f"- {x}\n"
+        return txt
+
+    if low.startswith("!remember "):
+        memory.append(m[10:])
+        save()
+        return "Retenu, je n'oublierai pas."
+
+    if low == "!forget":
+        memory.clear(); facts.clear(); save()
+        return "J'ai tout oublié, on recommence."
+
+    if "ça va" in low or "ca va" in low:
+        return "Ça va super, je suis en ligne. Et toi, ta journée ?"
+
+    if "quizz" in low or "quiz" in low:
+        return "Oui on fait un quizz ! Tu veux quoi comme sujet : foot, maths, histoire ?"
+
+    if low.endswith("?"):
+        return "Bonne question ! Tu peux m'en dire plus ? Qu'est-ce que toi tu en penses ?"
+
+    # Si il ne comprend pas, il apprend quand même et il continue la discussion
+    memory.append(m)
+    save()
+    return f"Ok j'ai retenu : \"{m}\". Et après ? Dis-moi la suite, je t'écoute vraiment."
